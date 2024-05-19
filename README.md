@@ -1,6 +1,6 @@
-# 以太坊提现 API
+# 以太坊水龙头
 
-这是一个使用 Go 语言和 Gin 框架编写的简单以太坊提现 API。该 API 允许用户从指定的以太坊钱包地址提现到另一个地址。
+这是一个使用 Go 语言和 Gin 框架编写的简单以太坊水龙头。
 
 ## 使用方法
 
@@ -25,7 +25,7 @@
       node_url: "https://goerli.infura.io/v3/YOUR_INFURA_PROJECT_ID"
       sender_address: "YOUR_GOERLI_SENDER_ADDRESS"
       private_key: "YOUR_GOERLI_PRIVATE_KEY"
-    sepolia:
+   sepolia:
       node_url: "https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID"
       sender_address: "YOUR_SEPOLIA_SENDER_ADDRESS"
       private_key: "YOUR_SEPOLIA_PRIVATE_KEY"

@@ -54,7 +54,7 @@
    ```json
   {
   "success": true,
-  "message": "提现成功：交易哈希"
+  "message": "0x交易哈希"
   }
    ```
     - `success`：领水是否成功。

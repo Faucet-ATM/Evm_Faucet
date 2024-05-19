@@ -57,7 +57,7 @@ func main() {
 	}
 }
 
-// handleWithdraw 处理提款请求
+// handleWithdraw 处理领水请求
 func handleWithdraw(c *gin.Context) {
 	var requestBody RequestBody
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
@@ -183,7 +183,7 @@ func handleWithdraw(c *gin.Context) {
 
 	c.JSON(http.StatusOK, ApiResponse{
 		Success: true,
-		Message: "Withdraw successful: " + signedTx.Hash().Hex(),
+		Message: signedTx.Hash().Hex(),
 	})
 }
 

@@ -21,6 +21,8 @@
 4. 在项目根目录创建一个 `configs` 目录，并添加一个 `config.yaml` 文件。示例内容：
     ```yaml
    amount: 1
+   rate_limiter: 24
+   port: 6006
    goerli:
       node_url: "https://goerli.infura.io/v3/YOUR_INFURA_PROJECT_ID"
       sender_address: "YOUR_GOERLI_SENDER_ADDRESS"

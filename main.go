@@ -7,6 +7,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
 	"os"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,13 +35,56 @@ type ApiResponse struct {
 	Data    interface{} `json:"data,omitempty"` // 使用 interface{} 类型允许这个字段保存任何类型的数据
 }
 
+type RateLimiter struct {
+	lastRequestTime map[string]time.Time // 存储每个用户的最后一次请求时间
+	mu              sync.Mutex           // 互斥锁，用于保护并发访问
+	requestInterval time.Duration        // 请求时间间隔
+}
+
+// 创建一个新的 RateLimiter 实例
+func NewRateLimiter(interval time.Duration) *RateLimiter {
+	return &RateLimiter{
+		lastRequestTime: make(map[string]time.Time),
+		requestInterval: interval,
+	}
+}
+
+// 中间件函数，用于限制每个用户每24小时只能请求一次
+func (rl *RateLimiter) Limit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		address := c.Query("address") // 假设从查询参数中获取用户ID
+
+		rl.mu.Lock()
+		defer rl.mu.Unlock()
+
+		lastTime, ok := rl.lastRequestTime[address]
+		if ok && time.Since(lastTime) < rl.requestInterval {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Only one request allowed per specified interval"})
+			c.Abort()
+			return
+		}
+
+		// 更新用户的最后一次请求时间
+		rl.lastRequestTime[address] = time.Now()
+
+		c.Next()
+	}
+}
+
 func main() {
+	var err error
 	// 初始化日志记录器
 	initLogger()
-	defer logger.Sync()
+	defer func(logger *zap.Logger) {
+		err := logger.Sync()
+		if err != nil {
+			fmt.Println("Failed to sync logger:", err)
+		}
+	}(logger)
+	logger, err = zap.NewProduction()
 
 	// 初始化配置管理器
-	var err error
+
 	cfg, err = initConfig()
 	if err != nil {
 		logger.Error("Failed to initialize config", zap.Error(err))
@@ -46,20 +92,39 @@ func main() {
 	}
 	// 创建 Gin 引擎
 	r := gin.Default()
+	rateLimiterStr := cfg.GetString("rate_limiter")
+	rateLimiter, err := strconv.Atoi(rateLimiterStr)
+	if err != nil {
+		panic(err)
+	}
 
+	limiter := NewRateLimiter(time.Duration(rateLimiter) * time.Hour)
+
+	r.Use(limiter.Limit())
 	// 设置路由
-	r.POST("/transfer", handleWithdraw)
+	r.POST("/sepolia/request", sepolia)
+	r.POST("/goerli/request", goerli)
 
 	// 启动 HTTP 服务器
-	err = r.Run(":8080")
+	port := cfg.GetInt("port")
+	err = r.Run(":" + strconv.Itoa(port))
 	if err != nil {
 		logger.Fatal("Failed to start server", zap.Error(err))
 	}
 }
 
+func sepolia(c *gin.Context) {
+	handleWithdraw(c)
+}
+
+func goerli(c *gin.Context) {
+	handleWithdraw(c)
+}
+
 // handleWithdraw 处理领水请求
 func handleWithdraw(c *gin.Context) {
 	var requestBody RequestBody
+	fmt.Println(requestBody)
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
 		c.JSON(http.StatusBadRequest, ApiResponse{
 			Success: false,
@@ -180,10 +245,18 @@ func handleWithdraw(c *gin.Context) {
 		})
 		return
 	}
-
+	type Data struct {
+		TxID        string `json:"tx_id"`
+		ExplorerUrl string `json:"explorer_url"`
+	}
+	explorerUrl := fmt.Sprintf("https://%s.etherscan.io/", network)
 	c.JSON(http.StatusOK, ApiResponse{
 		Success: true,
 		Message: signedTx.Hash().Hex(),
+		Data: Data{
+			TxID:        signedTx.Hash().Hex(),
+			ExplorerUrl: explorerUrl,
+		},
 	})
 }
 
@@ -210,9 +283,13 @@ func initConfig() (*viper.Viper, error) {
 	}
 	logger.Info("Config initialized successfully")
 	// 设置默认值
-	v.SetDefault("goerli.node_url", "https://goerli.infura.io/v3/YOUR_INFURA_PROJECT_ID")
 	v.SetDefault("amount", "1")
+	v.SetDefault("port", "8080")
+	v.SetDefault("rate_limiter", "24")
+
+	v.SetDefault("goerli.node_url", "https://goerli.infura.io/v3/YOUR_INFURA_PROJECT_ID")
 	v.SetDefault("goerli.sender_address", "YOUR_GOERLI_SENDER_ADDRESS")
+
 	v.SetDefault("sepolia.node_url", "https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID")
 	v.SetDefault("sepolia.sender_address", "YOUR_SEPOLIA_SENDER_ADDRESS")
 	return v, nil

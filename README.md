@@ -41,7 +41,8 @@
 
 ## 水龙头接口
 
-- URL： `/transfer`
+- URL： `/goerli/request`
+- URL： `/sepolia/request`
 - 方法： `POST`
 - 请求体:
     ```json

@@ -111,8 +111,7 @@ func main() {
 
 	r.Use(limiter.Limit())
 	// 设置路由
-	r.POST("/sepolia/request", sepolia)
-	r.POST("/goerli/request", goerli)
+	r.POST("/ether/request", handleWithdraw)
 
 	// 启动 HTTP 服务器
 	port := cfg.GetInt("port")
@@ -120,14 +119,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to start server", zap.Error(err))
 	}
-}
-
-func sepolia(c *gin.Context) {
-	handleWithdraw(c)
-}
-
-func goerli(c *gin.Context) {
-	handleWithdraw(c)
 }
 
 // handleWithdraw 处理领水请求
@@ -259,7 +250,7 @@ func handleWithdraw(c *gin.Context) {
 	c.JSON(http.StatusOK, ApiResponse{
 		Success:     true,
 		TxId:        signedTx.Hash().Hex(),
-		ExplorerUrl: explorerUrl,
+		ExplorerUrl: fmt.Sprintf("%s/tx/%s", explorerUrl, signedTx.Hash().Hex()),
 	})
 }
 

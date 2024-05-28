@@ -25,14 +25,16 @@ var (
 )
 
 type RequestBody struct {
-	Network string `json:"network"`
-	Address string `json:"address"`
+	Network string  `json:"network"`
+	Address string  `json:"address"`
+	Amount  float64 `json:"amount"`
 }
 
 type ApiResponse struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"` // 使用 interface{} 类型允许这个字段保存任何类型的数据
+	Success     bool   `json:"success"`
+	Message     string `json:"message,omitempty"`
+	TxId        string `json:"tx_id,omitempty"`
+	ExplorerUrl string `json:"explorer_url,omitempty"`
 }
 
 type RateLimiter struct {
@@ -52,12 +54,20 @@ func NewRateLimiter(interval time.Duration) *RateLimiter {
 // 中间件函数，用于限制每个用户每24小时只能请求一次
 func (rl *RateLimiter) Limit() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		address := c.Query("address") // 假设从查询参数中获取用户ID
-
+		var requestBody RequestBody
+		if err := c.ShouldBindBodyWithJSON(&requestBody); err != nil {
+			c.JSON(http.StatusBadRequest, ApiResponse{
+				Success: false,
+				Message: err.Error(),
+			})
+			return
+		}
+		Address := requestBody.Address
+		fmt.Println(Address)
 		rl.mu.Lock()
 		defer rl.mu.Unlock()
 
-		lastTime, ok := rl.lastRequestTime[address]
+		lastTime, ok := rl.lastRequestTime[Address]
 		if ok && time.Since(lastTime) < rl.requestInterval {
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Only one request allowed per specified interval"})
 			c.Abort()
@@ -65,8 +75,7 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 		}
 
 		// 更新用户的最后一次请求时间
-		rl.lastRequestTime[address] = time.Now()
-
+		rl.lastRequestTime[Address] = time.Now()
 		c.Next()
 	}
 }
@@ -124,8 +133,7 @@ func goerli(c *gin.Context) {
 // handleWithdraw 处理领水请求
 func handleWithdraw(c *gin.Context) {
 	var requestBody RequestBody
-	fmt.Println(requestBody)
-	if err := c.ShouldBindJSON(&requestBody); err != nil {
+	if err := c.ShouldBindBodyWithJSON(&requestBody); err != nil {
 		c.JSON(http.StatusBadRequest, ApiResponse{
 			Success: false,
 			Message: err.Error(),
@@ -141,9 +149,11 @@ func handleWithdraw(c *gin.Context) {
 		})
 		return
 	}
-	amount := big.NewInt(cfg.GetInt64("amount"))
-	amount.Mul(amount, big.NewInt(1e18))
-
+	amount := big.NewFloat(requestBody.Amount) //big.NewInt(cfg.GetInt64("amount"))
+	amount.Mul(amount, big.NewFloat(1e18))
+	amountInt := new(big.Int)
+	amount.Int(amountInt)
+	fmt.Println(amount)
 	network := requestBody.Network
 	nodeURL := cfg.GetString(network + ".node_url")
 	senderAddress := cfg.GetString(network + ".sender_address")
@@ -223,7 +233,7 @@ func handleWithdraw(c *gin.Context) {
 		GasFeeCap: gasPrice,
 		Gas:       gasLimit,
 		To:        &toAddress,
-		Value:     amount,
+		Value:     amountInt,
 		Data:      nil,
 	})
 	signedTx, err := types.SignTx(tx, types.NewLondonSigner(chainID), privateKey)
@@ -245,18 +255,11 @@ func handleWithdraw(c *gin.Context) {
 		})
 		return
 	}
-	type Data struct {
-		TxID        string `json:"tx_id"`
-		ExplorerUrl string `json:"explorer_url"`
-	}
 	explorerUrl := fmt.Sprintf("https://%s.etherscan.io/", network)
 	c.JSON(http.StatusOK, ApiResponse{
-		Success: true,
-		Message: signedTx.Hash().Hex(),
-		Data: Data{
-			TxID:        signedTx.Hash().Hex(),
-			ExplorerUrl: explorerUrl,
-		},
+		Success:     true,
+		TxId:        signedTx.Hash().Hex(),
+		ExplorerUrl: explorerUrl,
 	})
 }
 

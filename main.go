@@ -25,9 +25,9 @@ var (
 )
 
 type RequestBody struct {
-	Network string  `json:"network"`
-	Address string  `json:"address"`
-	Amount  float64 `json:"amount"`
+	Network string `json:"network"`
+	Address string `json:"address"`
+	Amount  string `json:"amount"`
 }
 
 type ApiResponse struct {
@@ -43,7 +43,7 @@ type RateLimiter struct {
 	requestInterval time.Duration        // 请求时间间隔
 }
 
-// 创建一个新的 RateLimiter 实例
+// NewRateLimiter 创建一个新的 RateLimiter 实例
 func NewRateLimiter(interval time.Duration) *RateLimiter {
 	return &RateLimiter{
 		lastRequestTime: make(map[string]time.Time),
@@ -51,7 +51,7 @@ func NewRateLimiter(interval time.Duration) *RateLimiter {
 	}
 }
 
-// 中间件函数，用于限制每个用户每24小时只能请求一次
+// Limit 中间件函数，用于限制每个用户每24小时只能请求一次
 func (rl *RateLimiter) Limit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var requestBody RequestBody
@@ -140,7 +140,12 @@ func handleWithdraw(c *gin.Context) {
 		})
 		return
 	}
-	amount := big.NewFloat(requestBody.Amount) //big.NewInt(cfg.GetInt64("amount"))
+	float, err := strconv.ParseFloat(requestBody.Amount, 64)
+	if err != nil {
+		fmt.Println("Error converting string to float64:", err)
+		return
+	}
+	amount := big.NewFloat(float) //big.NewInt(cfg.GetInt64("amount"))
 	amount.Mul(amount, big.NewFloat(1e18))
 	amountInt := new(big.Int)
 	amount.Int(amountInt)
@@ -281,8 +286,8 @@ func initConfig() (*viper.Viper, error) {
 	v.SetDefault("port", "8080")
 	v.SetDefault("rate_limiter", "24")
 
-	v.SetDefault("goerli.node_url", "https://goerli.infura.io/v3/YOUR_INFURA_PROJECT_ID")
-	v.SetDefault("goerli.sender_address", "YOUR_GOERLI_SENDER_ADDRESS")
+	v.SetDefault("holesky.node_url", "https://holesky.infura.io/v3/YOUR_INFURA_PROJECT_ID")
+	v.SetDefault("holesky.sender_address", "YOUR_HOLESKY_SENDER_ADDRESS")
 
 	v.SetDefault("sepolia.node_url", "https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID")
 	v.SetDefault("sepolia.sender_address", "YOUR_SEPOLIA_SENDER_ADDRESS")
